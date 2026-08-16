@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Stock.Ink">
+<meta name="theme-color" content="#241a12">
+<meta name="description" content="Gestion du stock de matériel de tatouage — 100% hors connexion.">
+<title>STOCK.INK — Cabinet de matériel</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  /* Polices 100% système : aucune requête réseau, fonctionne hors connexion */
+  :root{
+    /* Le caisson : bois sombre de la vitrine */
+    --wood:#241a12;
+    --wood-2:#2c2116;
+    --wood-line:#4a3927;
+    /* Les fiches : papier vélin épinglé dans la vitrine */
+    --parchment:#ece0c4;
+    --parchment-2:#e1d3ab;
+    --parchment-deep:#cdb989;
+    --vellum:#f5ecd3;
+    /* Encre sur papier */
+    --ink:#2b2013;
+    --ink-soft:#6b5a42;
+    --ink-faint:#a3906c;
+    /* Texte sur le bois */
+    --text-onwood:#e2d4b3;
+    --text-onwood-dim:#8f7c5c;
+    /* Accents : aile de monarque (alerte/action) + aile de saturnie (secondaire) */
+    --rust:#b8502c;
+    --rust-dark:#8a3a1f;
+    --rust-glow:rgba(184,80,44,.16);
+    --teal:#3e6a61;
+    --teal-dark:#2b4b44;
+    --brass:#a6803c;
+    --radius:4px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgba(184,80,44,.05), transparent 55%),
+      radial-gradient(800px 480px at 105% 8%, rgba(62,106,97,.07), transparent 55%),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.05) 0 1px, transparent 1px 90px),
+      var(--wood);
+    color:var(--text-onwood);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    -webkit-touch-callout:none;
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  input, .search-input, .cart-line, .history-card{-webkit-user-select:text;user-select:text;}
+  .mono{font-family:'SF Mono','Consolas','Roboto Mono',monospace;}
+  .display{
+    font-family:Georgia,'Iowan Old Style','Palatino Linotype','Times New Roman',serif;
+    font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+  }
+
+  .app{max-width:1040px;margin:0 auto;padding:28px 20px 80px;}
+
+  /* HEADER — planche entomologique */
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:16px;margin-bottom:30px;padding-bottom:20px;position:relative;
+    border-bottom:1px solid var(--wood-line);
+  }
+  .brand{display:flex;align-items:center;gap:14px;position:relative;z-index:1;}
+  .brand svg{flex-shrink:0;}
+  .brand h1{
+    font-family:Georgia,'Iowan Old Style','Palatino Linotype','Times New Roman',serif;font-weight:700;text-transform:uppercase;
+    font-size:32px;letter-spacing:.07em;margin:0;line-height:1;
+    color:var(--text-onwood);
+  }
+  .brand h1 span{color:var(--rust);}
+  .brand .sub{font-size:10.5px;color:var(--text-onwood-dim);text-transform:uppercase;letter-spacing:.16em;margin-top:5px;font-style:italic;}
+
+  /* TABS — planches numérotées du cabinet */
+  nav.tabs{
+    display:flex;gap:4px;margin-bottom:26px;
+    border-bottom:1px solid var(--wood-line);
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    background:none;border:none;color:var(--text-onwood-dim);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:13px;
+    padding:12px 16px;cursor:pointer;white-space:nowrap;letter-spacing:.01em;
+    border-bottom:2px solid transparent;
+    display:flex;align-items:center;gap:8px;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  nav.tabs button .num{
+    font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:10.5px;color:var(--text-onwood-dim);letter-spacing:0;
+  }
+  nav.tabs button.active{color:var(--vellum);border-bottom-color:var(--rust);}
+  nav.tabs button.active .num{color:var(--rust);}
+  nav.tabs button:hover{color:var(--text-onwood);}
+  .badge-count{
+    background:var(--rust);color:#fff;font-family:'SF Mono','Consolas','Roboto Mono',monospace;
+    font-size:10px;padding:1px 6px;border-radius:20px;line-height:1.5;
+  }
+
+  .panel-view{display:none;}
+  .panel-view.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  /* SECTION HEAD */
+  .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .section-head h2{font-size:22px;letter-spacing:.05em;margin:0;color:var(--text-onwood);}
+  .search-input{
+    background:var(--wood-2);border:1px solid var(--wood-line);color:var(--text-onwood);
+    padding:9px 12px;border-radius:var(--radius);font-size:13px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+    min-width:200px;
+  }
+  .search-input::placeholder{color:var(--text-onwood-dim);}
+  .search-input:focus{outline:none;border-color:var(--rust);}
+
+  button.btn{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:13px;
+    border-radius:var(--radius);padding:10px 16px;cursor:pointer;border:1px solid transparent;
+    transition:transform .1s ease, filter .15s ease;
+  }
+  button.btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--rust);color:#fff;}
+  .btn-primary:hover{filter:brightness(1.1);}
+  .btn-primary:disabled{background:var(--wood-line);color:var(--text-onwood-dim);cursor:not-allowed;}
+  .btn-ghost{background:transparent;border-color:var(--wood-line);color:var(--text-onwood-dim);}
+  .btn-ghost:hover{border-color:var(--text-onwood-dim);color:var(--text-onwood);}
+  .btn-teal{background:var(--teal);color:#fff;}
+  .btn-teal:hover{filter:brightness(1.15);}
+  .btn-sm{padding:6px 10px;font-size:12px;}
+  .icon-btn{
+    background:transparent;border:1px solid var(--wood-line);color:var(--text-onwood-dim);
+    width:30px;height:30px;border-radius:var(--radius);display:inline-flex;align-items:center;justify-content:center;
+    cursor:pointer;
+  }
+  .icon-btn:hover{color:var(--text-onwood);border-color:var(--text-onwood-dim);}
+  .icon-btn.danger:hover{color:var(--rust);border-color:var(--rust);}
+
+  /* FORM PANEL (add/edit item) — fiche d'ajout */
+  .form-card{
+    background:var(--parchment);border:1px solid var(--parchment-deep);border-radius:var(--radius);
+    padding:18px;margin-bottom:18px;display:none;
+  }
+  .form-card.open{display:block;}
+  .form-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:12px;align-items:end;}
+  .field label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-soft);margin-bottom:6px;font-weight:600;}
+  .field input{
+    width:100%;background:var(--vellum);border:1px solid var(--parchment-deep);color:var(--ink);
+    padding:9px 10px;border-radius:3px;font-size:13.5px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  }
+  .field input:focus{outline:none;border-color:var(--rust);}
+  .form-actions{grid-column:1/-1;display:flex;gap:10px;margin-top:4px;}
+
+  /* STOCK TABLE — registre des spécimens */
+  .table-wrap{background:var(--parchment);border:1px solid var(--parchment-deep);border-radius:var(--radius);overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{
+    text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.11em;
+    color:var(--ink-soft);padding:12px 14px;border-bottom:1px solid var(--parchment-deep);
+    font-weight:700;background:var(--parchment-2);
+  }
+  tbody td{padding:13px 14px;font-size:13.5px;border-bottom:1px solid var(--parchment-deep);vertical-align:middle;color:var(--ink);}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr{position:relative;transition:background .12s ease;}
+  tbody tr:hover{background:var(--parchment-2);}
+  tbody tr.low-stock{background:linear-gradient(90deg, var(--rust-glow), transparent 45%);}
+  tbody tr.low-stock td:first-child{box-shadow:inset 3px 0 0 var(--rust);}
+  .item-name{font-weight:700;color:var(--ink);}
+  .item-ref{color:var(--ink-soft);font-size:11.5px;}
+  .qty-val{font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:14px;color:var(--ink);}
+  .stamp{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:8px;font-weight:700;
+    letter-spacing:.03em;color:var(--rust);border:1.5px dashed var(--rust);
+    width:60px;height:60px;border-radius:50%;text-align:center;line-height:1.15;
+    transform:rotate(-8deg);margin-left:10px;vertical-align:middle;
+    position:relative;
+  }
+  .stamp::before{
+    content:"";position:absolute;top:3px;left:50%;width:3px;height:3px;
+    background:var(--rust);border-radius:50%;transform:translateX(-50%);
+  }
+  .price-val{font-family:'SF Mono','Consolas','Roboto Mono',monospace;color:var(--brass);font-weight:600;}
+  .row-actions{display:flex;gap:6px;justify-content:flex-end;}
+  .empty-state{padding:44px 20px;text-align:center;color:var(--ink-soft);}
+  .empty-state .display{font-size:19px;color:var(--ink);margin-bottom:8px;}
+
+  /* NEW TATTOO FORM */
+  .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;align-items:start;}
+  @media (max-width:760px){.grid-2{grid-template-columns:1fr;}}
+
+  .card{background:var(--parchment);border:1px solid var(--parchment-deep);border-radius:var(--radius);padding:20px;}
+  .card h3{font-size:18px;letter-spacing:.05em;margin:0 0 16px;color:var(--ink);}
+
+  .meta-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+  .date-pill{
+    display:inline-flex;align-items:center;gap:8px;background:var(--vellum);
+    border:1px solid var(--parchment-deep);border-radius:3px;padding:9px 12px;font-size:13.5px;
+    font-family:'SF Mono','Consolas','Roboto Mono',monospace;color:var(--ink-soft);
+  }
+  .date-pill svg{opacity:.65;}
+
+  .picker-row{display:flex;gap:8px;margin-bottom:16px;}
+  .picker-row select{
+    flex:1;background:var(--vellum);border:1px solid var(--parchment-deep);color:var(--ink);
+    padding:9px 10px;border-radius:3px;font-size:13.5px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  }
+  .picker-row input[type=number]{
+    width:70px;background:var(--vellum);border:1px solid var(--parchment-deep);color:var(--ink);
+    padding:9px 10px;border-radius:3px;font-size:13.5px;font-family:'SF Mono','Consolas','Roboto Mono',monospace;text-align:center;
+  }
+  .picker-row select:focus, .picker-row input:focus{outline:none;border-color:var(--rust);}
+
+  /* RECEIPT / CART — fiche d'identification épinglée */
+  .receipt{
+    background:var(--vellum);color:var(--ink);border-radius:3px;
+    padding:22px 18px 16px;position:relative;
+    border:1px solid var(--parchment-deep);
+    background-image:repeating-linear-gradient(180deg, transparent 0 27px, rgba(0,0,0,.035) 27px 28px);
+  }
+  .receipt::before, .receipt::after{
+    content:"";position:absolute;top:9px;width:7px;height:7px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #e4c98a, var(--brass) 65%, #7a5c26);
+    box-shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+  .receipt::before{left:12px;}
+  .receipt::after{right:12px;}
+  .receipt-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;border-bottom:1px dashed var(--parchment-deep);padding-bottom:10px;}
+  .receipt-head .display{font-size:19px;letter-spacing:.05em;}
+  .receipt-head span{font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:11px;color:var(--ink-soft);}
+  .cart-empty{padding:18px 4px;color:var(--ink-faint);font-size:13px;font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-style:italic;}
+  .cart-line{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px;border-bottom:1px solid rgba(0,0,0,.08);}
+  .cart-line .cl-name{flex:1;font-weight:600;}
+  .cart-line .cl-qty{font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:12.5px;color:var(--ink-soft);}
+  .cart-line .cl-sub{font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:12.5px;width:64px;text-align:right;}
+  .cart-line.warn .cl-name{color:var(--rust-dark);}
+  .cart-line.warn::after{content:"stock insuffisant";font-size:9.5px;color:var(--rust-dark);font-family:'SF Mono','Consolas','Roboto Mono',monospace;}
+  .cart-line .cl-remove{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;padding:0 2px;}
+  .cart-line .cl-remove:hover{color:var(--rust-dark);}
+  .receipt-total{display:flex;justify-content:space-between;padding-top:12px;margin-top:8px;border-top:1px dashed var(--parchment-deep);font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-weight:700;font-size:14px;}
+
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--teal);color:#fff;padding:12px 20px;border-radius:var(--radius);font-size:13.5px;font-weight:600;
+    opacity:0;pointer-events:none;transition:all .25s ease;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.err{background:var(--rust);}
+
+  /* HISTORY — journal des réalisations */
+  .history-card{
+    background:var(--parchment);border:1px solid var(--parchment-deep);border-radius:var(--radius);
+    padding:16px 18px;margin-bottom:12px;
+  }
+  .history-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .history-top .title{font-weight:700;font-size:15px;color:var(--ink);}
+  .history-top .date{font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:11.5px;color:var(--ink-soft);}
+  .history-meta{display:flex;gap:14px;font-size:11.5px;color:var(--ink-soft);margin-bottom:10px;}
+  .history-items{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{
+    background:var(--vellum);border:1px solid var(--parchment-deep);color:var(--ink-soft);
+    font-family:'SF Mono','Consolas','Roboto Mono',monospace;font-size:11px;padding:4px 8px;border-radius:3px;
+  }
+
+  footer.foot{margin-top:40px;text-align:center;}
+  footer.foot button{background:none;border:none;color:var(--text-onwood-dim);font-size:11px;text-decoration:underline;cursor:pointer;}
+  footer.foot button:hover{color:var(--rust);}
+
+  @media (max-width:640px){
+    .form-grid{grid-template-columns:1fr 1fr;}
+    .brand h1{font-size:24px;}
+    .meta-row{grid-template-columns:1fr;}
+    .table-wrap{overflow-x:auto;}
+    table{min-width:560px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <svg aria-hidden="true" width="260" height="180" viewBox="0 0 40 40" style="position:absolute;right:-10px;top:50%;transform:translateY(-50%);opacity:.06;pointer-events:none;" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="#e2d4b3" stroke-width=".9" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M20 19C13 8 5 7 4.5 14C4 21 12 24 20 19Z"/>
+        <path d="M20 19C14 23 7 27 7.5 33C8 38 15 33 20 19Z"/>
+        <path d="M20 19C27 8 35 7 35.5 14C36 21 28 24 20 19Z"/>
+        <path d="M20 19C26 23 33 27 32.5 33C32 38 25 33 20 19Z"/>
+      </g>
+      <path d="M20 9C19.3 12 19.3 27 20 33" stroke="#e2d4b3" stroke-width="1.1"/>
+    </svg>
+    <div class="brand">
+      <svg width="42" height="42" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g stroke="#b8502c" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M20 19C13 8 5 7 4.5 14C4 21 12 24 20 19Z"/>
+          <path d="M20 19C14 23 7 27 7.5 33C8 38 15 33 20 19Z"/>
+          <path d="M20 19C27 8 35 7 35.5 14C36 21 28 24 20 19Z"/>
+          <path d="M20 19C26 23 33 27 32.5 33C32 38 25 33 20 19Z"/>
+          <path d="M13 13C15 15 17 17 20 19" opacity=".45"/>
+          <path d="M27 13C25 15 23 17 20 19" opacity=".45"/>
+        </g>
+        <path d="M20 9C19.3 12 19.3 27 20 33" stroke="#e2d4b3" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M20 9C19 6 17.5 5 16 4.3M20 9C21 6 22.5 5 24 4.3" stroke="#e2d4b3" stroke-width="1.1" stroke-linecap="round"/>
+        <circle cx="20" cy="19.4" r="1" fill="#a6803c"/>
+      </svg>
+      <div>
+        <h1>STOCK<span>.INK</span></h1>
+        <div class="sub">Cabinet de matériel — salon de tatouage</div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="stock"><span class="num">Pl.01</span> Stock <span class="badge-count" id="lowStockBadge" style="display:none;"></span></button>
+    <button class="tab-btn" data-tab="new"><span class="num">Pl.02</span> Nouveau tatouage</button>
+    <button class="tab-btn" data-tab="history"><span class="num">Pl.03</span> Historique</button>
+  </nav>
+
+  <!-- TAB 1 : STOCK -->
+  <section class="panel-view active" id="view-stock">
+    <div class="section-head">
+      <h2>Matériel en stock</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <input type="text" class="search-input" id="searchInput" placeholder="Rechercher un article, une réf…">
+        <button class="btn btn-primary" id="openAddForm">+ Nouvel article</button>
+      </div>
+    </div>
+
+    <div class="form-card" id="itemFormCard">
+      <div class="form-grid">
+        <div class="field"><label>Nom</label><input type="text" id="f-name" placeholder="Aiguilles RL 5"></div>
+        <div class="field"><label>Référence</label><input type="text" id="f-ref" placeholder="RL-05"></div>
+        <div class="field"><label>Quantité</label><input type="number" id="f-qty" min="0" placeholder="0"></div>
+        <div class="field"><label>Seuil alerte</label><input type="number" id="f-alert" min="0" placeholder="5"></div>
+        <div class="field"><label>Prix moyen (€)</label><input type="number" id="f-price" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="saveItemBtn">Ajouter</button>
+          <button class="btn btn-ghost" id="cancelItemBtn">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nom</th><th>Réf</th><th>Stock</th><th>Seuil alerte</th><th>Prix moyen</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="stockTableBody"></tbody>
+      </table>
+      <div class="empty-state" id="stockEmpty" style="display:none;">
+        <div class="display">RIEN EN RÉSERVE</div>
+        Ajoutez votre premier article de matériel pour commencer.
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2 : NOUVEAU TATOUAGE -->
+  <section class="panel-view" id="view-new">
+    <div class="section-head"><h2>Nouveau tatouage</h2></div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Détails du projet</h3>
+        <div class="meta-row">
+          <div class="field"><label>Titre du projet</label><input type="text" id="proj-title" placeholder="Manchette japonaise — Léa"></div>
+          <div class="field"><label>Durée de réalisation</label><input type="text" id="proj-duration" placeholder="ex. 3h30"></div>
+        </div>
+        <div class="field" style="margin-bottom:16px;">
+          <label>Date</label>
+          <div class="date-pill" id="proj-date-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 10H21" stroke="currentColor" stroke-width="1.6"/><path d="M8 3V7M16 3V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span id="proj-date-text">—</span>
+          </div>
+        </div>
+
+        <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:8px;font-weight:600;">Ajouter du matériel</label>
+        <div class="picker-row">
+          <select id="itemPicker"></select>
+          <input type="number" id="pickerQty" value="1" min="1">
+          <button class="btn btn-teal" id="addToCartBtn">Ajouter</button>
+        </div>
+        <div style="font-size:11.5px;color:var(--ink-soft);">Chaque article ajouté sera décompté du stock une fois le formulaire validé.</div>
+      </div>
+
+      <div>
+        <div class="receipt">
+          <div class="receipt-head">
+            <span class="display" id="receiptTitle">PANIER</span>
+            <span id="receiptDate">—</span>
+          </div>
+          <div id="cartLines"><div class="cart-empty">Aucun article sélectionné.</div></div>
+          <div class="receipt-total"><span>Total estimé</span><span id="cartTotal">0,00 €</span></div>
+        </div>
+        <button class="btn btn-primary" id="validateBtn" style="width:100%;margin-top:14px;padding:13px;font-size:14px;" disabled>Valider et décompter le stock</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3 : HISTORIQUE -->
+  <section class="panel-view" id="view-history">
+    <div class="section-head"><h2>Historique des tatouages</h2></div>
+    <div id="historyList"></div>
+    <div class="empty-state" id="historyEmpty" style="display:none;">
+      <div class="display">AUCUN HISTORIQUE</div>
+      Vos projets validés apparaîtront ici.
+    </div>
+  </section>
+
+  <footer class="foot">
+    <button id="resetDataBtn">Réinitialiser toutes les données</button>
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const STORAGE_INVENTORY = "inventory";
+  const STORAGE_HISTORY = "history";
+
+  let inventory = [];
+  let history = [];
+  let cart = []; // {itemId, name, ref, qty, avgPrice}
+  let editingId = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- STORAGE (localStorage : tout reste sur cette tablette, hors connexion) ----------
+  async function loadInventory(){
+    try{
+      const raw = localStorage.getItem(STORAGE_INVENTORY);
+      if(raw){ inventory = JSON.parse(raw); }
+      else { inventory = seedInventory(); await saveInventory(); }
+    }catch(e){
+      inventory = seedInventory();
+      await saveInventory();
+    }
+  }
+  async function saveInventory(){
+    try{ localStorage.setItem(STORAGE_INVENTORY, JSON.stringify(inventory)); }
+    catch(e){ showToast("Erreur d'enregistrement du stock (mémoire pleine ?)", true); }
+  }
+  async function loadHistory(){
+    try{
+      const raw = localStorage.getItem(STORAGE_HISTORY);
+      history = raw ? JSON.parse(raw) : [];
+    }catch(e){ history = []; }
+  }
+  async function saveHistory(){
+    try{ localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history)); }
+    catch(e){ showToast("Erreur d'enregistrement de l'historique", true); }
+  }
+
+  function seedInventory(){
+    return [
+      {id: uid(), name:"Aiguilles RL 5", ref:"RL-05", qty:32, alertQty:10, avgPrice:0.90},
+      {id: uid(), name:"Aiguilles RM 9", ref:"RM-09", qty:6, alertQty:10, avgPrice:1.10},
+      {id: uid(), name:"Encre noire", ref:"ENC-BLK-30", qty:4, alertQty:3, avgPrice:14.50},
+      {id: uid(), name:"Gants nitrile (boîte)", ref:"GANT-M", qty:2, alertQty:3, avgPrice:9.90},
+      {id: uid(), name:"Film protection cellophane", ref:"FILM-STD", qty:18, alertQty:5, avgPrice:0.35},
+      {id: uid(), name:"Cartouches tatouage", ref:"CART-M1", qty:45, alertQty:15, avgPrice:0.55},
+    ];
+  }
+
+  function uid(){
+    return 'id_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+  }
+  function euro(n){
+    return (Number(n)||0).toLocaleString('fr-FR', {style:'currency', currency:'EUR'});
+  }
+  function todayISO(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function todayDisplay(){
+    return new Date().toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  }
+
+  let toastTimer;
+  function showToast(msg, isErr){
+    const t = $("toast");
+    t.textContent = msg;
+    t.className = "toast show" + (isErr ? " err" : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> t.classList.remove("show"), 3200);
+  }
+
+  // ---------- TABS ----------
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+      document.querySelectorAll(".panel-view").forEach(v=>v.classList.remove("active"));
+      btn.classList.add("active");
+      $("view-" + btn.dataset.tab).classList.add("active");
+      if(btn.dataset.tab === "history") renderHistory();
+    });
+  });
+
+  // ---------- STOCK TAB ----------
+  function renderStock(filter){
+    const tbody = $("stockTableBody");
+    const q = (filter || "").trim().toLowerCase();
+    const items = inventory
+      .filter(it => !q || it.name.toLowerCase().includes(q) || it.ref.toLowerCase().includes(q))
+      .sort((a,b)=> a.name.localeCompare(b.name, 'fr'));
+
+    tbody.innerHTML = "";
+    $("stockEmpty").style.display = inventory.length === 0 ? "block" : "none";
+
+    items.forEach(it=>{
+      const low = it.qty <= it.alertQty;
+      const tr = document.createElement("tr");
+      tr.className = low ? "low-stock" : "";
+      tr.innerHTML = `
+        <td><div class="item-name">${escapeHtml(it.name)}</div></td>
+        <td><span class="item-ref mono">${escapeHtml(it.ref)}</span></td>
+        <td><span class="qty-val">${it.qty}</span>${low ? '<span class="stamp">RÉSERVE<br>BASSE</span>' : ''}</td>
+        <td><span class="qty-val" style="color:var(--ink-soft);">${it.alertQty}</span></td>
+        <td><span class="price-val">${euro(it.avgPrice)}</span></td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" data-edit="${it.id}" title="Modifier">${iconEdit()}</button>
+            <button class="icon-btn danger" data-del="${it.id}" title="Supprimer">${iconTrash()}</button>
+          </div>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    const lowCount = inventory.filter(it => it.qty <= it.alertQty).length;
+    const badge = $("lowStockBadge");
+    if(lowCount > 0){ badge.style.display = "inline-block"; badge.textContent = lowCount; }
+    else { badge.style.display = "none"; }
+
+    tbody.querySelectorAll("[data-edit]").forEach(b=> b.addEventListener("click", ()=> openEditForm(b.dataset.edit)));
+    tbody.querySelectorAll("[data-del]").forEach(b=> b.addEventListener("click", ()=> deleteItem(b.dataset.del)));
+
+    populateItemPicker();
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function iconEdit(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M17 3l4 4L9 19H5v-4L17 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>'; }
+  function iconTrash(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
+
+  $("searchInput").addEventListener("input", (e)=> renderStock(e.target.value));
+
+  $("openAddForm").addEventListener("click", ()=>{
+    editingId = null;
+    clearItemForm();
+    $("itemFormCard").classList.add("open");
+    $("saveItemBtn").textContent = "Ajouter";
+    $("f-name").focus();
+  });
+  $("cancelItemBtn").addEventListener("click", closeItemForm);
+
+  function closeItemForm(){
+    $("itemFormCard").classList.remove("open");
+    editingId = null;
+    clearItemForm();
+  }
+  function clearItemForm(){
+    $("f-name").value = ""; $("f-ref").value = ""; $("f-qty").value = "";
+    $("f-alert").value = ""; $("f-price").value = "";
+  }
+  function openEditForm(id){
+    const it = inventory.find(x=>x.id===id);
+    if(!it) return;
+    editingId = id;
+    $("f-name").value = it.name; $("f-ref").value = it.ref; $("f-qty").value = it.qty;
+    $("f-alert").value = it.alertQty; $("f-price").value = it.avgPrice;
+    $("itemFormCard").classList.add("open");
+    $("saveItemBtn").textContent = "Enregistrer";
+    $("f-name").focus();
+  }
+
+  $("saveItemBtn").addEventListener("click", async ()=>{
+    const name = $("f-name").value.trim();
+    const ref = $("f-ref").value.trim();
+    const qty = Number($("f-qty").value);
+    const alertQty = Number($("f-alert").value);
+    const avgPrice = Number($("f-price").value);
+
+    if(!name){ showToast("Le nom de l'article est requis", true); return; }
+    if(!ref){ showToast("La référence est requise", true); return; }
+    if(isNaN(qty) || qty < 0){ showToast("Quantité invalide", true); return; }
+    if(isNaN(alertQty) || alertQty < 0){ showToast("Seuil d'alerte invalide", true); return; }
+    if(isNaN(avgPrice) || avgPrice < 0){ showToast("Prix moyen invalide", true); return; }
+
+    if(editingId){
+      const it = inventory.find(x=>x.id===editingId);
+      Object.assign(it, {name, ref, qty, alertQty, avgPrice});
+      showToast("Article mis à jour");
+    } else {
+      inventory.push({id: uid(), name, ref, qty, alertQty, avgPrice});
+      showToast("Article ajouté au stock");
+    }
+    await saveInventory();
+    closeItemForm();
+    renderStock($("searchInput").value);
+  });
+
+  async function deleteItem(id){
+    const it = inventory.find(x=>x.id===id);
+    if(!it) return;
+    if(!confirm(`Supprimer « ${it.name} » du stock ?`)) return;
+    inventory = inventory.filter(x=>x.id!==id);
+    await saveInventory();
+    renderStock($("searchInput").value);
+    showToast("Article supprimé");
+  }
+
+  // ---------- NEW TATTOO TAB ----------
+  function initProjectForm(){
+    $("proj-date-text").textContent = todayDisplay();
+    $("receiptDate").textContent = todayDisplay().split(' ').slice(0,3).join(' ');
+  }
+
+  function populateItemPicker(){
+    const sel = $("itemPicker");
+    const prev = sel.value;
+    sel.innerHTML = "";
+    const sorted = [...inventory].sort((a,b)=> a.name.localeCompare(b.name,'fr'));
+    if(sorted.length === 0){
+      sel.innerHTML = '<option value="">Aucun article en stock</option>';
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sorted.forEach(it=>{
+      const opt = document.createElement("option");
+      opt.value = it.id;
+      opt.textContent = `${it.name} (${it.qty} dispo)`;
+      sel.appendChild(opt);
+    });
+    if(prev) sel.value = prev;
+  }
+
+  $("addToCartBtn").addEventListener("click", ()=>{
+    const sel = $("itemPicker");
+    const id = sel.value;
+    if(!id){ showToast("Aucun article disponible", true); return; }
+    const qty = Math.max(1, Number($("pickerQty").value) || 1);
+    const it = inventory.find(x=>x.id===id);
+    if(!it) return;
+
+    const existing = cart.find(c=>c.itemId===id);
+    if(existing){ existing.qty += qty; }
+    else { cart.push({itemId:id, name:it.name, ref:it.ref, qty, avgPrice:it.avgPrice}); }
+
+    renderCart();
+    $("pickerQty").value = 1;
+  });
+
+  function renderCart(){
+    const linesEl = $("cartLines");
+    if(cart.length === 0){
+      linesEl.innerHTML = '<div class="cart-empty">Aucun article sélectionné.</div>';
+      $("cartTotal").textContent = euro(0);
+      $("validateBtn").disabled = true;
+      return;
+    }
+    let total = 0;
+    linesEl.innerHTML = cart.map(c=>{
+      const it = inventory.find(x=>x.id===c.itemId);
+      const available = it ? it.qty : 0;
+      const insufficient = c.qty > available;
+      const sub = c.qty * c.avgPrice;
+      total += sub;
+      return `<div class="cart-line ${insufficient?'warn':''}">
+        <span class="cl-name">${escapeHtml(c.name)}</span>
+        <span class="cl-qty">×${c.qty}</span>
+        <span class="cl-sub">${euro(sub)}</span>
+        <button class="cl-remove" data-remove="${c.itemId}" title="Retirer">✕</button>
+      </div>`;
+    }).join("");
+    $("cartTotal").textContent = euro(total);
+    $("validateBtn").disabled = false;
+
+    linesEl.querySelectorAll("[data-remove]").forEach(b=>{
+      b.addEventListener("click", ()=>{
+        cart = cart.filter(c=>c.itemId !== b.dataset.remove);
+        renderCart();
+      });
+    });
+  }
+
+  $("validateBtn").addEventListener("click", async ()=>{
+    const title = $("proj-title").value.trim();
+    const duration = $("proj-duration").value.trim();
+
+    if(!title){ showToast("Indiquez le titre du projet", true); return; }
+    if(cart.length === 0){ showToast("Le panier est vide", true); return; }
+
+    // décompte du stock
+    cart.forEach(c=>{
+      const it = inventory.find(x=>x.id===c.itemId);
+      if(it){ it.qty = Math.max(0, it.qty - c.qty); }
+    });
+    await saveInventory();
+
+    const total = cart.reduce((s,c)=> s + c.qty*c.avgPrice, 0);
+    history.unshift({
+      id: uid(),
+      dateISO: todayISO(),
+      dateDisplay: todayDisplay(),
+      title, duration: duration || "—",
+      items: cart.map(c=>({name:c.name, ref:c.ref, qty:c.qty})),
+      total
+    });
+    await saveHistory();
+
+    cart = [];
+    $("proj-title").value = "";
+    $("proj-duration").value = "";
+    renderCart();
+    renderStock($("searchInput").value);
+    showToast("Stock décompté — projet enregistré");
+  });
+
+  // ---------- HISTORY TAB ----------
+  function renderHistory(){
+    const list = $("historyList");
+    $("historyEmpty").style.display = history.length === 0 ? "block" : "none";
+    list.innerHTML = history.map(h=>`
+      <div class="history-card">
+        <div class="history-top">
+          <span class="title">${escapeHtml(h.title)}</span>
+          <span class="date">${escapeHtml(h.dateDisplay)}</span>
+        </div>
+        <div class="history-meta">
+          <span>Durée : ${escapeHtml(h.duration)}</span>
+          <span>Coût matériel : ${euro(h.total)}</span>
+        </div>
+        <div class="history-items">
+          ${h.items.map(i=>`<span class="chip">${escapeHtml(i.name)} ×${i.qty}</span>`).join("")}
+        </div>
+      </div>
+    `).join("");
+  }
+
+  // ---------- RESET ----------
+  $("resetDataBtn").addEventListener("click", async ()=>{
+    if(!confirm("Réinitialiser le stock et l'historique ? Cette action est irréversible.")) return;
+    inventory = seedInventory();
+    history = [];
+    await saveInventory();
+    await saveHistory();
+    renderStock("");
+    renderHistory();
+    renderCart();
+    showToast("Données réinitialisées");
+  });
+
+  // ---------- INIT ----------
+  (async function init(){
+    initProjectForm();
+    await loadInventory();
+    await loadHistory();
+    renderStock("");
+    renderCart();
+  })();
+
+})();
+</script>
+<script>
+  // Enregistrement du service worker : permet le fonctionnement 100% hors connexion
+  // après le tout premier chargement en ligne.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {
+        // échec silencieux : l'app fonctionne quand même en ligne
+      });
+    });
+  }
+</script>
+</body>
+</html>
